@@ -1,12 +1,12 @@
 /**
- * SoundBoard Studio - Application Logic
- * Audio Processing, Trimming, MP3 Encoding (LameJS), IndexedDB Storage & Soundboard UI
+ * SnipWave Studio - Application Logic
+ * Audio Processing, Trimming, MP3 Encoding (LameJS), YouTube & TikTok Extraction, Tab Capture & IndexedDB Storage
  */
 
 // ==========================================
 // 1. DATABASE (IndexedDB)
 // ==========================================
-const DB_NAME = 'SoundboardStudioDB';
+const DB_NAME = 'SnipWaveDB';
 const DB_VERSION = 1;
 const STORE_NAME = 'sounds';
 
@@ -45,7 +45,7 @@ function dbGetAllSounds() {
 
 function dbSaveSound(sound) {
   return new Promise((resolve, reject) => {
-    if (!db) return reject(new Error('DB not initialized'));
+    if (!db) return reject(new Error('DB non initialisée'));
     const tx = db.transaction(STORE_NAME, 'readwrite');
     const store = tx.objectStore(STORE_NAME);
     const req = store.put(sound);
@@ -56,7 +56,7 @@ function dbSaveSound(sound) {
 
 function dbDeleteSound(id) {
   return new Promise((resolve, reject) => {
-    if (!db) return reject(new Error('DB not initialized'));
+    if (!db) return reject(new Error('DB non initialisée'));
     const tx = db.transaction(STORE_NAME, 'readwrite');
     const store = tx.objectStore(STORE_NAME);
     const req = store.delete(id);
@@ -67,7 +67,7 @@ function dbDeleteSound(id) {
 
 function dbClearAllSounds() {
   return new Promise((resolve, reject) => {
-    if (!db) return reject(new Error('DB not initialized'));
+    if (!db) return reject(new Error('DB non initialisée'));
     const tx = db.transaction(STORE_NAME, 'readwrite');
     const store = tx.objectStore(STORE_NAME);
     const req = store.clear();
@@ -98,7 +98,6 @@ function getAudioContext() {
   return audioCtx;
 }
 
-// Store actively playing sounds { [soundId]: { source, gain, startTime, duration, timer, onEnded } }
 const activePlayers = new Map();
 
 function stopSound(soundId) {
@@ -117,7 +116,6 @@ function stopAllSounds() {
   for (const soundId of activePlayers.keys()) {
     stopSound(soundId);
   }
-  // Also stop preview player in trimmer if active
   stopPreview();
 }
 
@@ -127,7 +125,6 @@ async function playSound(sound) {
   if (isExclusiveMode) {
     stopAllSounds();
   } else if (activePlayers.has(sound.id)) {
-    // If clicking on already playing sound, stop or restart
     stopSound(sound.id);
     return;
   }
@@ -145,7 +142,6 @@ async function playSound(sound) {
       throw new Error('Données audio invalides');
     }
 
-    // Decode audio
     const audioBuffer = await ctx.decodeAudioData(arrayBuffer.slice(0));
 
     const source = ctx.createBufferSource();
@@ -162,7 +158,6 @@ async function playSound(sound) {
     const startTime = ctx.currentTime;
     const duration = audioBuffer.duration;
 
-    // Track playhead progress
     const timer = setInterval(() => {
       const elapsed = ctx.currentTime - startTime;
       let progress = (elapsed % duration) / duration;
@@ -193,7 +188,7 @@ async function playSound(sound) {
     updateCardPlayState(sound.id, true, 0);
   } catch (err) {
     console.error('Erreur lecture son:', err);
-    showToast('Erreur lors de la lecture du son : ' + err.message, 'error');
+    showToast('Erreur lors de la lecture : ' + err.message, 'error');
   }
 }
 
@@ -228,7 +223,6 @@ function encodeAudioBufferToMp3(audioBuffer, startSec = 0, endSec = null, kbps =
       const leftRaw = audioBuffer.getChannelData(0).subarray(startFrame, endFrame);
       const rightRaw = numChannels > 1 ? audioBuffer.getChannelData(1).subarray(startFrame, endFrame) : leftRaw;
 
-      // Convert Float32 to Int16
       const leftInt16 = new Int16Array(frameCount);
       const rightInt16 = numChannels > 1 ? new Int16Array(frameCount) : null;
 
@@ -296,7 +290,7 @@ let previewStartTime = 0;
 let isPreviewing = false;
 let isPreviewLooping = false;
 let previewTimer = null;
-let editingSoundId = null; // null if adding new, soundId if editing existing
+let editingSoundId = null;
 
 const canvas = document.getElementById('waveform-canvas');
 const canvasCtx = canvas ? canvas.getContext('2d') : null;
@@ -342,7 +336,6 @@ function drawWaveform() {
   const barWidth = width / barCount;
   const centerY = height / 2;
 
-  // Background grid lines
   canvasCtx.strokeStyle = 'rgba(255, 255, 255, 0.04)';
   canvasCtx.lineWidth = 1;
   canvasCtx.beginPath();
@@ -350,7 +343,6 @@ function drawWaveform() {
   canvasCtx.lineTo(width, centerY);
   canvasCtx.stroke();
 
-  // Draw bars
   for (let i = 0; i < barCount; i++) {
     const peak = waveformPeaks[i];
     const x = i * barWidth;
@@ -361,17 +353,14 @@ function drawWaveform() {
     const yTop = centerY - barHeight / 2;
 
     if (isSelected) {
-      // Cyan to purple gradient for active region
       const grad = canvasCtx.createLinearGradient(0, yTop, 0, yTop + barHeight);
       grad.addColorStop(0, '#06b6d4');
       grad.addColorStop(1, '#a855f7');
       canvasCtx.fillStyle = grad;
     } else {
-      // Dim gray for trimmed-out region
-      canvasCtx.fillStyle = 'rgba(156, 163, 175, 0.25)';
+      canvasCtx.fillStyle = 'rgba(156, 163, 175, 0.22)';
     }
 
-    // Rounded rectangle bar
     const r = Math.min(2, barWidth / 2);
     canvasCtx.beginPath();
     canvasCtx.roundRect(x, yTop, Math.max(1, barWidth - 1), barHeight, r);
@@ -393,7 +382,6 @@ function updateTrimOverlay() {
   trimRegionEl.style.left = `${leftPercent}%`;
   trimRegionEl.style.width = `${Math.max(0, widthPercent)}%`;
 
-  // Update time labels
   document.getElementById('input-start-sec').value = currentStartSec.toFixed(2);
   document.getElementById('input-end-sec').value = currentEndSec.toFixed(2);
 
@@ -419,9 +407,8 @@ function resizeWaveformCanvas() {
 
 window.addEventListener('resize', resizeWaveformCanvas);
 
-// Canvas Scrubbing & Dragging Handlers
 let isDraggingWaveform = false;
-let dragTarget = null; // 'start', 'end', or 'seek'
+let dragTarget = null;
 
 if (waveformBox) {
   waveformBox.addEventListener('mousedown', (e) => {
@@ -467,7 +454,6 @@ function handleWaveformPointer(e) {
   } else if (dragTarget === 'end') {
     currentEndSec = Math.min(currentAudioBuffer.duration, Math.max(clickedTime, currentStartSec + 0.05));
   } else if (dragTarget === 'seek') {
-    // Seek playhead
     updatePlayheadPosition(clickedTime);
   }
 
@@ -483,7 +469,6 @@ function updatePlayheadPosition(timeSec) {
   document.getElementById('val-current-time').textContent = formatTime(timeSec);
 }
 
-// Waveform Preview Controls
 function startPreview() {
   const ctx = getAudioContext();
   stopPreview();
@@ -497,10 +482,8 @@ function startPreview() {
 
   previewStartTime = ctx.currentTime;
   isPreviewing = true;
-
   updatePreviewUI(true);
 
-  // Animate playhead
   previewTimer = setInterval(() => {
     const elapsed = ctx.currentTime - previewStartTime;
     const current = currentStartSec + (elapsed % trimmedDuration);
@@ -555,11 +538,11 @@ function updatePreviewUI(playing) {
 }
 
 // ==========================================
-// 5. AUDIO LOADING (File, URL, Mic)
+// 5. AUDIO LOADING (File, YouTube, TikTok, Tab Capture, Mic)
 // ==========================================
-async function loadAudioFromArrayBuffer(arrayBuffer, defaultName = 'Mon Son') {
+async function loadAudioFromArrayBuffer(arrayBuffer, defaultName = 'Mon Son', emoji = '🔊') {
   const ctx = getAudioContext();
-  showTrimmerLoading(true, 'Décodage audio du média en cours...');
+  showTrimmerLoading(true, 'Décodage audio du média...');
 
   try {
     const buffer = await ctx.decodeAudioData(arrayBuffer.slice(0));
@@ -567,7 +550,7 @@ async function loadAudioFromArrayBuffer(arrayBuffer, defaultName = 'Mon Son') {
     currentSourceFileName = defaultName;
 
     currentStartSec = 0;
-    currentEndSec = Math.min(buffer.duration, 10); // default to first 10 seconds or full
+    currentEndSec = Math.min(buffer.duration, 10);
 
     waveformPeaks = generateWaveformPeaks(buffer);
 
@@ -575,28 +558,26 @@ async function loadAudioFromArrayBuffer(arrayBuffer, defaultName = 'Mon Son') {
     document.getElementById('input-start-sec').max = buffer.duration;
     document.getElementById('input-end-sec').max = buffer.duration;
 
-    // Prefill name if empty
     const nameInput = document.getElementById('input-sound-name');
-    if (!nameInput.value || nameInput.value === 'Mon Son') {
-      nameInput.value = defaultName.replace(/\.[^/.]+$/, ''); // remove extension
-    }
+    nameInput.value = defaultName.replace(/\.[^/.]+$/, '');
 
-    // Auto assign next available key
+    const emojiInput = document.getElementById('input-sound-emoji');
+    if (emoji) emojiInput.value = emoji;
+
     if (!document.getElementById('input-sound-key').value) {
       document.getElementById('input-sound-key').value = getNextAvailableKey();
     }
 
-    // Reveal trimmer editor
     document.getElementById('trimmer-editor').classList.remove('hidden');
     document.getElementById('btn-save-to-soundboard').disabled = false;
     document.getElementById('btn-download-mp3-direct').disabled = false;
 
     showTrimmerLoading(false);
-    setTimeout(() => resizeWaveformCanvas(), 50);
+    setTimeout(() => resizeWaveformCanvas(), 60);
   } catch (err) {
     showTrimmerLoading(false);
     console.error('Error decoding audio:', err);
-    showToast('Format non supporté ou fichier audio invalide : ' + err.message, 'error');
+    showToast('Format non supporté ou fichier corrompu : ' + err.message, 'error');
   }
 }
 
@@ -605,115 +586,248 @@ async function loadAudioFromFile(file) {
   const name = file.name || 'Son local';
   try {
     const arrayBuffer = await file.arrayBuffer();
-    await loadAudioFromArrayBuffer(arrayBuffer, name);
+    await loadAudioFromArrayBuffer(arrayBuffer, name, '📁');
   } catch (err) {
     showToast('Erreur lecture fichier : ' + err.message, 'error');
   }
 }
 
-async function loadAudioFromUrl(url) {
-  if (!url || !url.trim()) {
-    showToast('Veuillez entrer une URL valide', 'warning');
+// ------------------------------------------
+// YOUTUBE EXTRACTION
+// ------------------------------------------
+function extractYouTubeId(url) {
+  if (!url) return null;
+  const match = url.match(/(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=|shorts\/))([\w-]{11})/i);
+  return match ? match[1] : null;
+}
+
+async function loadAudioFromYouTube(url) {
+  const videoId = extractYouTubeId(url);
+  if (!videoId) {
+    showToast('URL YouTube invalide. Ex: https://youtube.com/watch?v=... ou Shorts', 'warning');
     return;
   }
-  url = url.trim();
-  showTrimmerLoading(true, 'Téléchargement du fichier depuis l’URL...');
 
-  let arrayBuffer = null;
+  showTrimmerLoading(true, 'Connexion à YouTube et extraction du flux audio...');
 
-  // 1. Try direct fetch
-  try {
-    const res = await fetch(url);
-    if (res.ok) {
-      arrayBuffer = await res.arrayBuffer();
-    }
-  } catch (e) {
-    console.warn('Direct fetch failed, testing CORS proxy...', e);
-  }
+  const invidiousInstances = [
+    'https://yt.chocolatemoo53.com',
+    'https://inv.nadeko.net',
+    'https://invidious.nerdvpn.de',
+    'https://invidious.tiekoetter.com'
+  ];
 
-  // 2. Try proxy if direct failed
-  if (!arrayBuffer) {
-    const proxies = [
-      (u) => `https://corsproxy.io/?url=${encodeURIComponent(u)}`,
-      (u) => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`
-    ];
+  let audioBufferData = null;
+  let videoTitle = 'YouTube Sound';
 
-    for (const proxyGen of proxies) {
+  for (const instance of invidiousInstances) {
+    try {
+      showTrimmerLoading(true, `Extraction audio en cours...`);
+      const metaRes = await fetch(`${instance}/api/v1/videos/${videoId}`, { signal: AbortSignal.timeout(6000) });
+      if (!metaRes.ok) continue;
+
+      const meta = await metaRes.json();
+      videoTitle = meta.title || videoTitle;
+
+      // Find best audio stream in adaptiveFormats
+      const audioStreams = (meta.adaptiveFormats || []).filter((f) => f.type && f.type.startsWith('audio'));
+      if (audioStreams.length === 0) continue;
+
+      // Prefer m4a or webm high/medium quality
+      const chosenFormat = audioStreams.find((f) => f.container === 'm4a') || audioStreams[0];
+      const audioStreamUrl = chosenFormat.url || `${instance}/latest_version?id=${videoId}&itag=${chosenFormat.itag || 140}`;
+
+      // Fetch the audio stream
       try {
-        const proxyUrl = proxyGen(url);
-        const res = await fetch(proxyUrl);
-        if (res.ok) {
-          arrayBuffer = await res.arrayBuffer();
+        const audioFetch = await fetch(audioStreamUrl, { signal: AbortSignal.timeout(12000) });
+        if (audioFetch.ok) {
+          audioBufferData = await audioFetch.arrayBuffer();
           break;
         }
-      } catch (err) {
-        console.warn('Proxy attempt failed:', err);
+      } catch (streamErr) {
+        console.warn('Stream direct fetch failed, trying proxy...', streamErr);
       }
+    } catch (e) {
+      console.warn(`Instance ${instance} error:`, e);
     }
   }
 
-  if (arrayBuffer && arrayBuffer.byteLength > 0) {
-    // Extract a friendly name from URL
-    let name = 'Son Web';
-    try {
-      const u = new URL(url);
-      const pathname = u.pathname;
-      const last = pathname.split('/').filter(Boolean).pop();
-      if (last) name = decodeURIComponent(last);
-    } catch (e) {}
-    await loadAudioFromArrayBuffer(arrayBuffer, name);
+  if (audioBufferData && audioBufferData.byteLength > 0) {
+    await loadAudioFromArrayBuffer(audioBufferData, videoTitle, '▶');
+    showToast(`Son YouTube "${videoTitle}" extrait avec succès !`, 'success');
   } else {
     showTrimmerLoading(false);
-    showToast("Impossible d'accéder à ce lien (CORS ou vidéo protégée). Vous pouvez télécharger le fichier et l'importer dans l'onglet 'Fichier local'.", 'error');
+    showToast("Impossible d'extraire directement cette vidéo YouTube (protection ou restriction réseau). Utilisez l'onglet 'Onglet Live' pour capturer l'audio directement !", 'warning');
   }
 }
 
-// Microphone Recording
-let mediaRecorder = null;
-let recordedChunks = [];
-let recordTimer = null;
-let recordSeconds = 0;
+// ------------------------------------------
+// TIKTOK EXTRACTION
+// ------------------------------------------
+async function loadAudioFromTikTok(url) {
+  if (!url || !url.trim().includes('tiktok.com')) {
+    showToast('Veuillez entrer un lien TikTok valide (ex: https://www.tiktok.com/@.../video/... ou vm.tiktok.com/...)', 'warning');
+    return;
+  }
+  url = url.trim();
+  showTrimmerLoading(true, 'Extraction de la vidéo / bande-son TikTok...');
+
+  let audioBufferData = null;
+  let soundTitle = 'TikTok Sound';
+
+  try {
+    const formData = new URLSearchParams();
+    formData.append('url', url);
+    formData.append('hd', '1');
+
+    const res = await fetch('https://www.tikwm.com/api/', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: formData,
+      signal: AbortSignal.timeout(8000)
+    });
+
+    if (res.ok) {
+      const data = await res.json();
+      if (data.code === 0 && data.data) {
+        soundTitle = data.data.title || (data.data.music_info ? data.data.music_info.title : soundTitle);
+        // Direct media URL: either clean music stream or video stream
+        const mediaUrl = data.data.music || data.data.play || data.data.wmplay;
+        if (mediaUrl) {
+          const streamRes = await fetch(mediaUrl, { signal: AbortSignal.timeout(12000) });
+          if (streamRes.ok) {
+            audioBufferData = await streamRes.arrayBuffer();
+          }
+        }
+      }
+    }
+  } catch (e) {
+    console.warn('TikTok extraction error:', e);
+  }
+
+  if (audioBufferData && audioBufferData.byteLength > 0) {
+    await loadAudioFromArrayBuffer(audioBufferData, soundTitle, '♪');
+    showToast(`Son TikTok "${soundTitle.substring(0, 30)}..." extrait avec succès !`, 'success');
+  } else {
+    showTrimmerLoading(false);
+    showToast("Impossible d'extraire ce lien TikTok. Vous pouvez utiliser l'onglet 'Onglet Live' pour capturer l'audio en direct pendant la lecture !", 'warning');
+  }
+}
+
+// ------------------------------------------
+// TAB AUDIO CAPTURE (Direct browser stream)
+// ------------------------------------------
+let tabCaptureStream = null;
+let tabMediaRecorder = null;
+let tabRecordedChunks = [];
+let tabCaptureTimer = null;
+let tabCaptureSec = 0;
+
+async function toggleTabAudioCapture() {
+  const btnLabel = document.getElementById('label-tab-capture-btn');
+  const statusEl = document.getElementById('tab-capture-status');
+
+  if (tabMediaRecorder && tabMediaRecorder.state === 'recording') {
+    tabMediaRecorder.stop();
+    clearInterval(tabCaptureTimer);
+    btnLabel.textContent = 'Choisir un onglet & Enregistrer';
+    statusEl.classList.add('hidden');
+    return;
+  }
+
+  try {
+    // Request tab/screen capture with audio
+    tabCaptureStream = await navigator.mediaDevices.getDisplayMedia({
+      video: true,
+      audio: true
+    });
+
+    const audioTracks = tabCaptureStream.getAudioTracks();
+    if (audioTracks.length === 0) {
+      tabCaptureStream.getTracks().forEach((t) => t.stop());
+      showToast("Attention : Vous devez cocher la case 'Partager l'audio de l'onglet' lors du choix de l'onglet !", 'warning');
+      return;
+    }
+
+    tabRecordedChunks = [];
+    tabCaptureSec = 0;
+    tabMediaRecorder = new MediaRecorder(tabCaptureStream);
+
+    tabMediaRecorder.ondataavailable = (e) => {
+      if (e.data.size > 0) tabRecordedChunks.push(e.data);
+    };
+
+    tabMediaRecorder.onstop = async () => {
+      tabCaptureStream.getTracks().forEach((t) => t.stop());
+      const blob = new Blob(tabRecordedChunks, { type: 'audio/webm' });
+      const arrayBuffer = await blob.arrayBuffer();
+      await loadAudioFromArrayBuffer(arrayBuffer, 'Capture Onglet Live', '⚡');
+      showToast('Capture terminée avec succès ! Découpez maintenant votre extrait.', 'success');
+    };
+
+    tabMediaRecorder.start();
+    btnLabel.textContent = 'Arrêter la capture';
+    statusEl.classList.remove('hidden');
+    statusEl.textContent = 'Enregistrement en direct : 00:00';
+
+    tabCaptureTimer = setInterval(() => {
+      tabCaptureSec++;
+      const m = String(Math.floor(tabCaptureSec / 60)).padStart(2, '0');
+      const s = String(tabCaptureSec % 60).padStart(2, '0');
+      statusEl.textContent = `Enregistrement en direct : ${m}:${s}`;
+    }, 1000);
+  } catch (err) {
+    console.warn('Tab capture error:', err);
+    showToast('Capture annulée ou non autorisée : ' + err.message, 'info');
+  }
+}
+
+// ------------------------------------------
+// MICROPHONE RECORDING
+// ------------------------------------------
+let micMediaRecorder = null;
+let micRecordedChunks = [];
+let micRecordTimer = null;
+let micRecordSeconds = 0;
 
 async function toggleMicRecording() {
   const icon = document.getElementById('icon-mic-record');
   const label = document.getElementById('label-record-time');
 
-  if (mediaRecorder && mediaRecorder.state === 'recording') {
-    // Stop recording
-    mediaRecorder.stop();
-    clearInterval(recordTimer);
+  if (micMediaRecorder && micMediaRecorder.state === 'recording') {
+    micMediaRecorder.stop();
+    clearInterval(micRecordTimer);
     icon.setAttribute('data-lucide', 'mic');
     if (window.lucide) lucide.createIcons();
     return;
   }
 
-  // Start recording
   try {
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    mediaRecorder = new MediaRecorder(stream);
-    recordedChunks = [];
-    recordSeconds = 0;
+    micMediaRecorder = new MediaRecorder(stream);
+    micRecordedChunks = [];
+    micRecordSeconds = 0;
     label.textContent = '00:00';
 
-    mediaRecorder.ondataavailable = (e) => {
-      if (e.data.size > 0) recordedChunks.push(e.data);
+    micMediaRecorder.ondataavailable = (e) => {
+      if (e.data.size > 0) micRecordedChunks.push(e.data);
     };
 
-    mediaRecorder.onstop = async () => {
-      const blob = new Blob(recordedChunks, { type: 'audio/webm' });
+    micMediaRecorder.onstop = async () => {
+      const blob = new Blob(micRecordedChunks, { type: 'audio/webm' });
       stream.getTracks().forEach((t) => t.stop());
       const arrayBuffer = await blob.arrayBuffer();
-      await loadAudioFromArrayBuffer(arrayBuffer, 'Enregistrement Micro');
+      await loadAudioFromArrayBuffer(arrayBuffer, 'Enregistrement Micro', '🎙️');
     };
 
-    mediaRecorder.start();
+    micMediaRecorder.start();
     icon.setAttribute('data-lucide', 'square');
     if (window.lucide) lucide.createIcons();
 
-    recordTimer = setInterval(() => {
-      recordSeconds++;
-      const m = String(Math.floor(recordSeconds / 60)).padStart(2, '0');
-      const s = String(recordSeconds % 60).padStart(2, '0');
+    micRecordTimer = setInterval(() => {
+      micRecordSeconds++;
+      const m = String(Math.floor(micRecordSeconds / 60)).padStart(2, '0');
+      const s = String(micRecordSeconds % 60).padStart(2, '0');
       label.textContent = `${m}:${s}`;
     }, 1000);
   } catch (err) {
@@ -735,7 +849,7 @@ function showTrimmerLoading(show, message = 'Chargement...') {
 // 6. PRESET SOUNDS GENERATOR (Offline Synthesizer)
 // ==========================================
 async function generatePresetSounds() {
-  showToast('Génération des sons d’exemple en cours...', 'info');
+  showToast('Génération des sons d’exemple...', 'info');
 
   const presets = [
     {
@@ -745,18 +859,17 @@ async function generatePresetSounds() {
       color: '#06b6d4',
       duration: 1.2,
       synth: (ctx) => {
-        // Brass chord stabs
         const osc1 = ctx.createOscillator();
         const osc2 = ctx.createOscillator();
         const osc3 = ctx.createOscillator();
         const gain = ctx.createGain();
 
         osc1.type = 'sawtooth';
-        osc1.frequency.setValueAtTime(466.16, 0); // Bb4
+        osc1.frequency.setValueAtTime(466.16, 0);
         osc2.type = 'sawtooth';
-        osc2.frequency.setValueAtTime(587.33, 0); // D5
+        osc2.frequency.setValueAtTime(587.33, 0);
         osc3.type = 'sawtooth';
-        osc3.frequency.setValueAtTime(698.46, 0); // F5
+        osc3.frequency.setValueAtTime(698.46, 0);
 
         gain.gain.setValueAtTime(0.3, 0);
         gain.gain.exponentialRampToValueAtTime(0.001, 1.15);
@@ -799,7 +912,7 @@ async function generatePresetSounds() {
       color: '#ec4899',
       duration: 1.5,
       synth: (ctx) => {
-        const notes = [523.25, 659.25, 783.99, 1046.5]; // C E G C
+        const notes = [523.25, 659.25, 783.99, 1046.5];
         notes.forEach((freq, idx) => {
           const osc = ctx.createOscillator();
           const gain = ctx.createGain();
@@ -954,12 +1067,10 @@ function renderSoundboard() {
 
   grid.innerHTML = filtered.map((sound) => createSoundCardHtml(sound)).join('');
 
-  // Attach card event listeners
   filtered.forEach((sound) => {
     const cardEl = document.getElementById(`card-${sound.id}`);
     if (!cardEl) return;
 
-    // Main Card Click to Play
     const playBtn = cardEl.querySelector('.btn-card-play');
     if (playBtn) {
       playBtn.addEventListener('click', (e) => {
@@ -969,12 +1080,10 @@ function renderSoundboard() {
     }
 
     cardEl.addEventListener('click', (e) => {
-      // Don't trigger if clicking sliders, menu, or buttons inside
       if (e.target.closest('button') || e.target.closest('input')) return;
       playSound(sound);
     });
 
-    // Volume Slider per sound
     const volSlider = cardEl.querySelector('.slider-card-vol');
     if (volSlider) {
       volSlider.addEventListener('input', (e) => {
@@ -991,7 +1100,6 @@ function renderSoundboard() {
       });
     }
 
-    // Loop Toggle
     const loopBtn = cardEl.querySelector('.btn-card-loop');
     if (loopBtn) {
       loopBtn.addEventListener('click', async (e) => {
@@ -1006,7 +1114,6 @@ function renderSoundboard() {
       });
     }
 
-    // Download MP3
     const dlBtn = cardEl.querySelector('.btn-card-download');
     if (dlBtn) {
       dlBtn.addEventListener('click', (e) => {
@@ -1017,7 +1124,6 @@ function renderSoundboard() {
       });
     }
 
-    // Edit / Retrim
     const editBtn = cardEl.querySelector('.btn-card-edit');
     if (editBtn) {
       editBtn.addEventListener('click', async (e) => {
@@ -1026,7 +1132,6 @@ function renderSoundboard() {
       });
     }
 
-    // Delete Sound
     const delBtn = cardEl.querySelector('.btn-card-delete');
     if (delBtn) {
       delBtn.addEventListener('click', async (e) => {
@@ -1051,7 +1156,6 @@ function createSoundCardHtml(sound) {
 
   return `
     <div id="card-${sound.id}" class="sound-card p-4 flex flex-col justify-between cursor-pointer group" style="--card-color: ${color}; --card-glow: ${color}40;">
-      <!-- Top banner / Key & Duration & Menu -->
       <div class="flex items-center justify-between mb-3">
         <div class="flex items-center gap-1.5">
           ${keyLabel ? `<span class="kbd-badge text-cyan-300" title="Touche raccourci">[${keyLabel}]</span>` : ''}
@@ -1071,7 +1175,6 @@ function createSoundCardHtml(sound) {
         </div>
       </div>
 
-      <!-- Center: Emoji & Name & Large Play Button -->
       <div class="flex items-center gap-3 my-2">
         <button class="btn-card-play w-12 h-12 rounded-xl flex items-center justify-center text-white shadow-lg transition transform group-hover:scale-105 active:scale-95" style="background-color: ${color};">
           <i data-lucide="play" class="card-play-icon w-6 h-6 fill-current"></i>
@@ -1086,19 +1189,17 @@ function createSoundCardHtml(sound) {
         </div>
       </div>
 
-      <!-- Bottom: Volume & Loop -->
       <div class="flex items-center justify-between gap-2 pt-2 border-t border-white/5 mt-2 text-xs">
         <div class="flex items-center gap-1.5 flex-1 max-w-[120px]">
           <i data-lucide="volume-1" class="w-3 h-3 text-gray-500"></i>
-          <input type="range" class="slider-card-vol w-full h-1 bg-gray-800 rounded appearance-none cursor-pointer" min="0" max="1" step="0.05" value="${sound.volume !== undefined ? sound.volume : 1}" title="Volume de ce son">
+          <input type="range" class="slider-card-vol w-full h-1 bg-gray-800 rounded appearance-none cursor-pointer" min="0" max="1" step="0.05" value="${sound.volume !== undefined ? sound.volume : 1}" title="Volume">
         </div>
 
-        <button class="btn-card-loop p-1 rounded transition ${sound.loop ? 'text-cyan-400' : 'text-gray-500 hover:text-gray-300'}" title="Activer / désactiver la boucle">
+        <button class="btn-card-loop p-1 rounded transition ${sound.loop ? 'text-cyan-400' : 'text-gray-500 hover:text-gray-300'}" title="Boucler">
           <i data-lucide="repeat" class="w-3.5 h-3.5"></i>
         </button>
       </div>
 
-      <!-- Playback Progress bar indicator -->
       <div class="card-progress w-0"></div>
     </div>
   `;
@@ -1149,16 +1250,13 @@ async function openTrimmerForSound(sound) {
   document.getElementById('modal-title').textContent = `Modifier "${sound.name}"`;
   document.getElementById('btn-save-text').textContent = 'Mettre à jour le son';
 
-  // Populate metadata
   document.getElementById('input-sound-name').value = sound.name;
   document.getElementById('select-sound-cat').value = sound.category || 'Général';
   document.getElementById('input-sound-key').value = sound.keybind || '';
   document.getElementById('input-sound-emoji').value = sound.emoji || '🔊';
 
-  // Select color
   setSelectedColor(sound.color || '#06b6d4');
 
-  // Load sound blob into audio context
   try {
     let arrayBuffer;
     if (sound.blob instanceof Blob) {
@@ -1167,7 +1265,7 @@ async function openTrimmerForSound(sound) {
       const res = await fetch(sound.blob);
       arrayBuffer = await res.arrayBuffer();
     }
-    await loadAudioFromArrayBuffer(arrayBuffer, sound.name);
+    await loadAudioFromArrayBuffer(arrayBuffer, sound.name, sound.emoji);
   } catch (e) {
     showToast('Erreur chargement pour modification: ' + e.message, 'error');
   }
@@ -1186,7 +1284,8 @@ function resetTrimmerModal() {
   document.getElementById('input-sound-name').value = '';
   document.getElementById('input-sound-key').value = '';
   document.getElementById('input-sound-emoji').value = '🔊';
-  document.getElementById('input-audio-url').value = '';
+  document.getElementById('input-youtube-url').value = '';
+  document.getElementById('input-tiktok-url').value = '';
   document.getElementById('input-audio-file').value = '';
   document.getElementById('trimmer-editor').classList.add('hidden');
   document.getElementById('btn-save-to-soundboard').disabled = true;
@@ -1195,7 +1294,6 @@ function resetTrimmerModal() {
   setSelectedColor('#06b6d4');
 }
 
-// Color picker logic
 let selectedColor = '#06b6d4';
 function setSelectedColor(color) {
   selectedColor = color;
@@ -1214,13 +1312,6 @@ function setSelectedColor(color) {
 document.addEventListener('DOMContentLoaded', async () => {
   await initDB();
   await reloadSoundboard();
-
-  // If completely new user, prompt sample sounds load option
-  if (allSounds.length === 0) {
-    // Show empty state
-    document.getElementById('empty-state').classList.remove('hidden');
-    document.getElementById('empty-state').classList.add('flex');
-  }
 
   // Master Volume
   const masterSlider = document.getElementById('slider-master-volume');
@@ -1252,10 +1343,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (window.lucide) lucide.createIcons();
   });
 
-  // Stop All Sounds
   document.getElementById('btn-stop-all').addEventListener('click', stopAllSounds);
 
-  // Exclusive Mode Toggle
   const exclusiveBtn = document.getElementById('btn-toggle-exclusive');
   const exclusiveText = document.getElementById('text-exclusive');
   exclusiveBtn.addEventListener('click', () => {
@@ -1281,7 +1370,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   });
 
-  // Export Soundboard JSON
+  // Export JSON
   document.getElementById('btn-export-json').addEventListener('click', async () => {
     backupPopover.classList.add('hidden');
     backupPopover.classList.remove('flex');
@@ -1293,7 +1382,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     showToast('Préparation de l’export...', 'info');
 
-    // Convert blobs to base64
     const exportData = [];
     for (const sound of allSounds) {
       let b64 = '';
@@ -1317,11 +1405,11 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     const jsonStr = JSON.stringify({ version: 1, exportedAt: new Date().toISOString(), sounds: exportData }, null, 2);
     const blob = new Blob([jsonStr], { type: 'application/json' });
-    downloadBlob(blob, `soundboard-export-${Date.now()}.json`);
+    downloadBlob(blob, `snipwave-export-${Date.now()}.json`);
     showToast('Export de la soundboard terminé !', 'success');
   });
 
-  // Import Soundboard JSON
+  // Import JSON
   const fileImportInput = document.getElementById('file-import-soundboard');
   document.getElementById('btn-trigger-import').addEventListener('click', () => {
     backupPopover.classList.add('hidden');
@@ -1374,7 +1462,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('btn-clear-soundboard').addEventListener('click', async () => {
     backupPopover.classList.add('hidden');
     backupPopover.classList.remove('flex');
-    if (confirm('Êtes-vous sûr de vouloir supprimer tous les sons de votre soundboard ?')) {
+    if (confirm('Êtes-vous sûr de vouloir supprimer tous les sons ?')) {
       stopAllSounds();
       await dbClearAllSounds();
       await reloadSoundboard();
@@ -1433,41 +1521,36 @@ document.addEventListener('DOMContentLoaded', async () => {
   closeModalBtn.addEventListener('click', closeModal);
   cancelModalBtn.addEventListener('click', closeModal);
 
-  // Modal Source Tabs
-  const tabBtnFile = document.getElementById('tab-btn-file');
-  const tabBtnUrl = document.getElementById('tab-btn-url');
-  const tabBtnMic = document.getElementById('tab-btn-mic');
-  const tabContentFile = document.getElementById('tab-content-file');
-  const tabContentUrl = document.getElementById('tab-content-url');
-  const tabContentMic = document.getElementById('tab-content-mic');
+  // Source Tabs Navigation
+  const sourceTabs = [
+    { btn: 'tab-btn-file', content: 'tab-content-file' },
+    { btn: 'tab-btn-youtube', content: 'tab-content-youtube' },
+    { btn: 'tab-btn-tiktok', content: 'tab-content-tiktok' },
+    { btn: 'tab-btn-capture', content: 'tab-content-capture' },
+    { btn: 'tab-btn-mic', content: 'tab-content-mic' }
+  ];
 
-  const switchTab = (tab) => {
-    [tabBtnFile, tabBtnUrl, tabBtnMic].forEach((b) => {
-      b.classList.remove('bg-cyan-500', 'text-gray-950', 'font-bold');
-      b.classList.add('text-gray-400');
+  sourceTabs.forEach(({ btn, content }) => {
+    const btnEl = document.getElementById(btn);
+    if (!btnEl) return;
+    btnEl.addEventListener('click', () => {
+      sourceTabs.forEach((t) => {
+        const b = document.getElementById(t.btn);
+        const c = document.getElementById(t.content);
+        if (b) {
+          b.classList.remove('bg-cyan-500', 'text-gray-950', 'font-bold');
+          b.classList.add('text-gray-400');
+        }
+        if (c) c.classList.add('hidden');
+      });
+      btnEl.classList.add('bg-cyan-500', 'text-gray-950', 'font-bold');
+      btnEl.classList.remove('text-gray-400');
+      const targetContent = document.getElementById(content);
+      if (targetContent) targetContent.classList.remove('hidden');
     });
-    [tabContentFile, tabContentUrl, tabContentMic].forEach((c) => c.classList.add('hidden'));
+  });
 
-    if (tab === 'file') {
-      tabBtnFile.classList.add('bg-cyan-500', 'text-gray-950', 'font-bold');
-      tabBtnFile.classList.remove('text-gray-400');
-      tabContentFile.classList.remove('hidden');
-    } else if (tab === 'url') {
-      tabBtnUrl.classList.add('bg-cyan-500', 'text-gray-950', 'font-bold');
-      tabBtnUrl.classList.remove('text-gray-400');
-      tabContentUrl.classList.remove('hidden');
-    } else if (tab === 'mic') {
-      tabBtnMic.classList.add('bg-cyan-500', 'text-gray-950', 'font-bold');
-      tabBtnMic.classList.remove('text-gray-400');
-      tabContentMic.classList.remove('hidden');
-    }
-  };
-
-  tabBtnFile.addEventListener('click', () => switchTab('file'));
-  tabBtnUrl.addEventListener('click', () => switchTab('url'));
-  tabBtnMic.addEventListener('click', () => switchTab('mic'));
-
-  // Dropzone / File selection
+  // File Dropzone
   const dropzone = document.getElementById('dropzone');
   const fileInput = document.getElementById('input-audio-file');
 
@@ -1493,17 +1576,32 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   });
 
-  // URL Loader
-  const urlInput = document.getElementById('input-audio-url');
-  const fetchUrlBtn = document.getElementById('btn-fetch-url');
-  fetchUrlBtn.addEventListener('click', () => {
-    loadAudioFromUrl(urlInput.value);
+  // YouTube Extraction Trigger
+  const ytInput = document.getElementById('input-youtube-url');
+  const ytBtn = document.getElementById('btn-fetch-youtube');
+  ytBtn.addEventListener('click', () => {
+    loadAudioFromYouTube(ytInput.value);
   });
-  urlInput.addEventListener('keydown', (e) => {
+  ytInput.addEventListener('keydown', (e) => {
     if (e.key === 'Enter') {
-      loadAudioFromUrl(urlInput.value);
+      loadAudioFromYouTube(ytInput.value);
     }
   });
+
+  // TikTok Extraction Trigger
+  const tiktokInput = document.getElementById('input-tiktok-url');
+  const tiktokBtn = document.getElementById('btn-fetch-tiktok');
+  tiktokBtn.addEventListener('click', () => {
+    loadAudioFromTikTok(tiktokInput.value);
+  });
+  tiktokInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      loadAudioFromTikTok(tiktokInput.value);
+    }
+  });
+
+  // Tab Audio Live Capture
+  document.getElementById('btn-start-tab-capture').addEventListener('click', toggleTabAudioCapture);
 
   // Mic Button
   document.getElementById('btn-record-mic').addEventListener('click', toggleMicRecording);
@@ -1542,10 +1640,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     drawWaveform();
   });
 
-  // Set Start / End on playhead needle
+  // Set Start / End on cursor needle
   document.getElementById('btn-set-start-here').addEventListener('click', () => {
     if (!currentAudioBuffer) return;
-    // If preview is playing, use preview current time
     let curTime = currentStartSec;
     if (isPreviewing) {
       const elapsed = getAudioContext().currentTime - previewStartTime;
@@ -1581,7 +1678,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     previewLoopBtn.classList.toggle('text-cyan-400', isPreviewLooping);
     previewLoopBtn.classList.toggle('text-gray-400', !isPreviewLooping);
     if (isPreviewing) {
-      startPreview(); // restart with new loop setting
+      startPreview();
     }
   });
 
@@ -1664,13 +1761,11 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // Global Keyboard Shortcuts
   window.addEventListener('keydown', (e) => {
-    // Escape stops all sounds
     if (e.key === 'Escape') {
       stopAllSounds();
       return;
     }
 
-    // Do not trigger keybind if user is typing in an input or textarea
     const activeTag = document.activeElement ? document.activeElement.tagName.toLowerCase() : '';
     if (activeTag === 'input' || activeTag === 'textarea' || activeTag === 'select') {
       return;
@@ -1687,7 +1782,6 @@ document.addEventListener('DOMContentLoaded', async () => {
   if (window.lucide) lucide.createIcons();
 });
 
-// Helper: Blob to Base64
 function blobToBase64(blob) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -1697,7 +1791,6 @@ function blobToBase64(blob) {
   });
 }
 
-// Helper: Toast Notifications
 let toastTimer = null;
 function showToast(message, type = 'info') {
   const toast = document.getElementById('toast');
