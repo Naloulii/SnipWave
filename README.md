@@ -32,16 +32,6 @@
 
 ---
 
-## 🚀 Hébergement sur GitHub Pages
-
-Le projet est conçu pour fonctionner 100% côté client sans aucun backend ni serveur Node.js.
-
-1. Paramètres du dépôt : **Settings** > **Pages**.
-2. **Build and deployment** : sélectionné sur **GitHub Actions** (workflow inclus dans `.github/workflows/deploy.yml`).
-3. Accès direct : [https://naloulii.github.io/SnipWave/](https://naloulii.github.io/SnipWave/)
-
----
-
 ## 🛠️ Technologies Utilisées
 
 - **HTML5 & CSS3** moderne avec Glassmorphism et effets néon.
