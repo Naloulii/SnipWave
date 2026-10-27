@@ -1,0 +1,475 @@
+<!DOCTYPE html>
+<html lang="fr" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SoundBoard Studio — Créez, Découpez & Téléchargez vos sons en MP3</title>
+  <meta name="description" content="Soundboard personnalisable moderne hébergée sur GitHub Pages. Découpez n'importe quel son ou vidéo locale/URL et téléchargez directement en MP3.">
+
+  <!-- Favicon -->
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220%22%20width=%2232%22%20height=%2232%22><text y=%2226%22 font-size=%2226%22>🔊</text></svg>">
+
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              cyan: '#06b6d4',
+              purple: '#8b5cf6',
+              pink: '#ec4899',
+              green: '#10b981',
+              dark: '#0b0f19',
+              darkcard: '#111827'
+            }
+          }
+        }
+      }
+    }
+  </script>
+
+  <!-- Lucide Icons CDN -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+
+  <!-- LameJS MP3 Encoder (Local fallback & CDN) -->
+  <script src="vendor/lame.min.js"></script>
+
+  <link rel="stylesheet" href="style.css">
+</head>
+<body class="bg-[#0b0f19] text-gray-100 min-h-screen relative flex flex-col font-sans">
+  <div class="bg-glow"></div>
+
+  <!-- Header -->
+  <header class="glass-panel sticky top-0 z-40 border-b border-white/10 px-4 lg:px-8 py-3">
+    <div class="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-4">
+      
+      <!-- Logo & Title -->
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-cyan-500 to-purple-600 flex items-center justify-center shadow-lg shadow-cyan-500/20">
+          <i data-lucide="volume-2" class="w-6 h-6 text-white"></i>
+        </div>
+        <div>
+          <div class="flex items-center gap-2">
+            <h1 class="text-xl font-black tracking-tight text-white bg-clip-text bg-gradient-to-r from-white via-gray-100 to-gray-400">
+              SoundBoard Studio
+            </h1>
+            <span class="px-2 py-0.5 text-xs font-semibold rounded-full bg-cyan-500/20 text-cyan-300 border border-cyan-500/30">
+              MP3 Trimmer
+            </span>
+          </div>
+          <p class="text-xs text-gray-400 hidden sm:block">Ajoutez, coupez vos sons & téléchargez en MP3</p>
+        </div>
+      </div>
+
+      <!-- Center / Controls -->
+      <div class="flex items-center gap-4 flex-wrap">
+        <!-- Master Volume -->
+        <div class="flex items-center gap-2 bg-gray-900/80 px-3 py-1.5 rounded-lg border border-white/5">
+          <button id="btn-master-mute" class="text-gray-400 hover:text-white transition" title="Couper / Activer le son général">
+            <i data-lucide="volume-2" id="icon-master-mute" class="w-4 h-4"></i>
+          </button>
+          <input type="range" id="slider-master-volume" min="0" max="1" step="0.05" value="1" class="w-20 sm:w-24 h-1.5 bg-gray-700 rounded-lg appearance-none cursor-pointer" title="Volume général">
+          <span id="label-master-volume" class="text-xs font-mono text-gray-400 w-8">100%</span>
+        </div>
+
+        <!-- Stop all sounds button -->
+        <button id="btn-stop-all" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/30 text-xs font-medium transition active:scale-95 shadow-sm" title="Arrêter tous les sons en cours (Échap)">
+          <i data-lucide="square" class="w-3.5 h-3.5 fill-current"></i>
+          <span class="hidden sm:inline">Arrêter tout</span>
+          <span class="text-[10px] bg-red-950/60 px-1.5 py-0.5 rounded border border-red-800/40 text-red-300">Échap</span>
+        </button>
+
+        <!-- Exclusive mode toggle -->
+        <button id="btn-toggle-exclusive" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gray-900/80 hover:bg-gray-800 text-gray-300 border border-white/10 text-xs transition" title="Mode exclusif : joue un seul son à la fois">
+          <i data-lucide="layers" class="w-3.5 h-3.5 text-gray-400"></i>
+          <span id="text-exclusive" class="hidden md:inline">Multi-sons</span>
+        </button>
+      </div>
+
+      <!-- Action buttons -->
+      <div class="flex items-center gap-2.5">
+        <!-- Export / Import dropdown or buttons -->
+        <button id="btn-backup-menu" class="p-2 rounded-lg bg-gray-900/80 hover:bg-gray-800 text-gray-300 border border-white/10 transition" title="Options de sauvegarde / import">
+          <i data-lucide="download-cloud" class="w-4 h-4"></i>
+        </button>
+
+        <!-- Hidden input for file import -->
+        <input type="file" id="file-import-soundboard" accept=".json" class="hidden">
+
+        <!-- Add Sound Primary Button -->
+        <button id="btn-open-add-modal" class="flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white font-semibold text-sm shadow-lg shadow-cyan-500/25 transition-all transform hover:-translate-y-0.5 active:translate-y-0">
+          <i data-lucide="plus" class="w-4 h-4 stroke-[3]"></i>
+          <span>Ajouter un son</span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Content -->
+  <main class="flex-1 max-w-7xl w-full mx-auto px-4 lg:px-8 py-6 flex flex-col gap-6">
+
+    <!-- Backup menu popover (hidden by default) -->
+    <div id="backup-popover" class="hidden glass-modal absolute top-16 right-4 sm:right-16 z-50 p-3 rounded-xl flex-col gap-2 w-64 shadow-2xl border border-white/10">
+      <div class="text-xs font-semibold text-gray-400 px-2 uppercase tracking-wider">Sauvegarde</div>
+      <button id="btn-export-json" class="flex items-center gap-2 px-3 py-2 text-xs rounded-lg hover:bg-white/10 text-gray-200 transition text-left">
+        <i data-lucide="file-output" class="w-4 h-4 text-cyan-400"></i>
+        <span>Exporter la Soundboard (.json)</span>
+      </button>
+      <button id="btn-trigger-import" class="flex items-center gap-2 px-3 py-2 text-xs rounded-lg hover:bg-white/10 text-gray-200 transition text-left">
+        <i data-lucide="file-input" class="w-4 h-4 text-purple-400"></i>
+        <span>Importer une sauvegarde (.json)</span>
+      </button>
+      <div class="border-t border-white/10 my-1"></div>
+      <button id="btn-load-presets" class="flex items-center gap-2 px-3 py-2 text-xs rounded-lg hover:bg-white/10 text-gray-200 transition text-left">
+        <i data-lucide="sparkles" class="w-4 h-4 text-amber-400"></i>
+        <span>Charger les sons d'exemple</span>
+      </button>
+      <button id="btn-clear-soundboard" class="flex items-center gap-2 px-3 py-2 text-xs rounded-lg hover:bg-red-500/20 text-red-300 transition text-left">
+        <i data-lucide="trash-2" class="w-4 h-4 text-red-400"></i>
+        <span>Vider toute la Soundboard</span>
+      </button>
+    </div>
+
+    <!-- Toolbar: Search & Filters -->
+    <div class="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+      <!-- Search -->
+      <div class="relative flex-1 max-w-md">
+        <i data-lucide="search" class="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none"></i>
+        <input type="text" id="search-input" placeholder="Rechercher un son ou raccourci..." class="w-full pl-10 pr-4 py-2 rounded-xl bg-gray-900/60 border border-white/10 text-sm text-gray-200 placeholder-gray-500 focus:outline-none focus:border-cyan-500/60 focus:ring-1 focus:ring-cyan-500/60 transition">
+      </div>
+
+      <!-- Categories / Tags -->
+      <div class="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0" id="category-filter-list">
+        <button class="cat-pill active px-3 py-1.5 rounded-lg text-xs font-medium bg-cyan-500/20 text-cyan-300 border border-cyan-500/40" data-cat="all">Tous (<span id="sound-count-badge">0</span>)</button>
+        <button class="cat-pill px-3 py-1.5 rounded-lg text-xs font-medium bg-gray-900/60 hover:bg-gray-800 text-gray-400 border border-white/5" data-cat="Memes">😂 Memes</button>
+        <button class="cat-pill px-3 py-1.5 rounded-lg text-xs font-medium bg-gray-900/60 hover:bg-gray-800 text-gray-400 border border-white/5" data-cat="Effets">💥 Effets</button>
+        <button class="cat-pill px-3 py-1.5 rounded-lg text-xs font-medium bg-gray-900/60 hover:bg-gray-800 text-gray-400 border border-white/5" data-cat="Musique">🎵 Musique</button>
+        <button class="cat-pill px-3 py-1.5 rounded-lg text-xs font-medium bg-gray-900/60 hover:bg-gray-800 text-gray-400 border border-white/5" data-cat="Voix">🗣️ Voix</button>
+      </div>
+    </div>
+
+    <!-- Soundboard Grid -->
+    <div id="soundboard-grid" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+      <!-- Generated sound cards will be injected here -->
+    </div>
+
+    <!-- Empty State -->
+    <div id="empty-state" class="hidden flex-col items-center justify-center py-16 px-4 text-center glass-panel rounded-2xl border-dashed border-2 border-white/10 my-4">
+      <div class="w-16 h-16 rounded-2xl bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center text-cyan-400 mb-4 shadow-lg shadow-cyan-500/10">
+        <i data-lucide="music-4" class="w-8 h-8"></i>
+      </div>
+      <h3 class="text-lg font-bold text-white mb-1">Votre Soundboard est vide</h3>
+      <p class="text-sm text-gray-400 max-w-md mb-6">
+        Ajoutez un son depuis votre ordinateur ou collez l'URL d'une vidéo/audio. Vous pourrez choisir le début, la fin et télécharger l'extrait en MP3 !
+      </p>
+      <div class="flex flex-wrap items-center justify-center gap-3">
+        <button id="btn-empty-add" class="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-gray-950 font-bold text-sm shadow-lg shadow-cyan-500/25 transition">
+          <i data-lucide="plus" class="w-4 h-4 stroke-[3]"></i>
+          <span>Ajouter un son</span>
+        </button>
+        <button id="btn-empty-presets" class="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gray-800 hover:bg-gray-700 text-gray-200 text-sm font-medium border border-white/10 transition">
+          <i data-lucide="sparkles" class="w-4 h-4 text-amber-400"></i>
+          <span>Charger des sons d'exemple</span>
+        </button>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- Footer -->
+  <footer class="mt-auto border-t border-white/5 py-4 px-4 text-center text-xs text-gray-500">
+    <div class="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-2">
+      <p>SoundBoard Studio — 100% exécuté dans votre navigateur (aucun son n'est envoyé sur un serveur tiers).</p>
+      <p class="text-gray-400">Hébergé fièrement sur <span class="text-cyan-400">GitHub Pages</span> 🚀</p>
+    </div>
+  </footer>
+
+  <!-- ============================================================== -->
+  <!-- MODAL : AJOUTER / RECOUPER UN SON (TRIMMER STUDIO) -->
+  <!-- ============================================================== -->
+  <div id="modal-trimmer" class="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 overflow-y-auto hidden">
+    <div class="glass-modal w-full max-w-3xl rounded-2xl border border-white/10 overflow-hidden shadow-2xl my-auto animate-fade-in">
+      
+      <!-- Modal Header -->
+      <div class="flex items-center justify-between px-6 py-4 border-b border-white/10 bg-gray-900/40">
+        <div class="flex items-center gap-3">
+          <div id="modal-icon-badge" class="w-9 h-9 rounded-xl bg-cyan-500/20 text-cyan-400 flex items-center justify-center border border-cyan-500/30">
+            <i data-lucide="scissors" class="w-5 h-5"></i>
+          </div>
+          <div>
+            <h2 id="modal-title" class="text-base sm:text-lg font-bold text-white">Ajouter & Découper un son</h2>
+            <p class="text-xs text-gray-400">Importez, choisissez le début et la fin, puis enregistrez ou téléchargez en MP3</p>
+          </div>
+        </div>
+        <button id="btn-close-modal" class="text-gray-400 hover:text-white p-1 rounded-lg hover:bg-white/10 transition">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <!-- Modal Body -->
+      <div class="p-6 space-y-6 max-h-[80vh] overflow-y-auto">
+
+        <!-- Source Selector Tabs -->
+        <div>
+          <label class="block text-xs font-semibold text-gray-300 uppercase tracking-wider mb-2">1. Source audio ou vidéo</label>
+          <div class="flex rounded-xl bg-gray-900/90 p-1 border border-white/10 text-xs font-medium">
+            <button id="tab-btn-file" class="flex-1 flex items-center justify-center gap-2 py-2 rounded-lg bg-cyan-500 text-gray-950 font-bold transition">
+              <i data-lucide="upload" class="w-4 h-4"></i>
+              <span>Fichier local (Audio / Vidéo)</span>
+            </button>
+            <button id="tab-btn-url" class="flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-gray-400 hover:text-white transition">
+              <i data-lucide="link" class="w-4 h-4"></i>
+              <span>URL Vidéo / Audio</span>
+            </button>
+            <button id="tab-btn-mic" class="flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-gray-400 hover:text-white transition">
+              <i data-lucide="mic" class="w-4 h-4"></i>
+              <span>Microphone</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Tab 1: Local File Input -->
+        <div id="tab-content-file" class="space-y-3">
+          <div id="dropzone" class="border-2 border-dashed border-white/15 hover:border-cyan-500/50 rounded-xl p-6 text-center cursor-pointer transition flex flex-col items-center justify-center bg-gray-900/30">
+            <input type="file" id="input-audio-file" accept="audio/*,video/*" class="hidden">
+            <div class="w-12 h-12 rounded-full bg-cyan-500/10 text-cyan-400 flex items-center justify-center mb-3">
+              <i data-lucide="file-audio" class="w-6 h-6"></i>
+            </div>
+            <p class="text-sm font-semibold text-gray-200">Glissez-déposez votre fichier ici, ou <span class="text-cyan-400 underline">parcourir</span></p>
+            <p class="text-xs text-gray-400 mt-1">Accepte MP3, WAV, OGG, AAC, M4A, FLAC, ainsi que les vidéos MP4, WebM...</p>
+          </div>
+        </div>
+
+        <!-- Tab 2: URL Input -->
+        <div id="tab-content-url" class="hidden space-y-3">
+          <div class="flex gap-2">
+            <div class="relative flex-1">
+              <i data-lucide="globe" class="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400"></i>
+              <input type="url" id="input-audio-url" placeholder="https://example.com/audio-ou-video.mp4 ou .mp3" class="w-full pl-10 pr-4 py-2.5 rounded-xl bg-gray-900/80 border border-white/10 text-sm text-gray-200 focus:outline-none focus:border-cyan-500 transition">
+            </div>
+            <button id="btn-fetch-url" class="px-5 py-2.5 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-gray-950 font-bold text-xs uppercase tracking-wider transition flex items-center gap-2">
+              <i data-lucide="download" class="w-4 h-4"></i>
+              <span>Charger</span>
+            </button>
+          </div>
+          <p class="text-xs text-gray-400 leading-relaxed">
+            💡 <strong class="text-gray-300">Astuce :</strong> Fonctionne avec tous les liens directs vers un fichier audio ou vidéo (.mp3, .wav, .mp4, .webm). En cas de blocage CORS, un proxy automatique sécurisé tente le chargement.
+          </p>
+        </div>
+
+        <!-- Tab 3: Microphone -->
+        <div id="tab-content-mic" class="hidden space-y-3 text-center py-4">
+          <div class="flex flex-col items-center gap-3">
+            <button id="btn-record-mic" class="w-16 h-16 rounded-full bg-red-500 hover:bg-red-400 text-white flex items-center justify-center shadow-lg shadow-red-500/30 transition transform hover:scale-105 active:scale-95">
+              <i data-lucide="mic" id="icon-mic-record" class="w-8 h-8"></i>
+            </button>
+            <span id="label-record-time" class="text-sm font-mono text-gray-300">00:00</span>
+            <p class="text-xs text-gray-400">Cliquez pour enregistrer un son depuis votre micro, recliquez pour arrêter.</p>
+          </div>
+        </div>
+
+        <!-- Loading Spinner -->
+        <div id="trimmer-loading" class="hidden py-8 flex flex-col items-center justify-center gap-3 text-cyan-400">
+          <div class="w-8 h-8 border-2 border-cyan-500 border-t-transparent rounded-full animate-spin"></div>
+          <span class="text-xs text-gray-300 font-medium" id="trimmer-loading-text">Décodage du fichier audio en cours...</span>
+        </div>
+
+        <!-- Trimmer Section (Hidden until audio is loaded) -->
+        <div id="trimmer-editor" class="hidden space-y-6 pt-2 border-t border-white/10">
+
+          <!-- Waveform Display -->
+          <div class="space-y-2">
+            <div class="flex items-center justify-between text-xs">
+              <span class="font-semibold text-gray-300 uppercase tracking-wider">2. Sélectionner l'intervalle</span>
+              <div class="flex items-center gap-2 text-gray-400 font-mono">
+                <span>Position : <strong id="val-current-time" class="text-white">00:00.00</strong></span>
+                <span>/</span>
+                <span id="val-total-duration">00:00.00</span>
+              </div>
+            </div>
+
+            <!-- Waveform Canvas Box -->
+            <div class="waveform-box relative select-none" id="waveform-container">
+              <canvas id="waveform-canvas" class="waveform-canvas"></canvas>
+              
+              <!-- Selection overlay -->
+              <div id="trim-region" class="trim-region"></div>
+              
+              <!-- Playhead needle -->
+              <div id="playhead-needle" class="playhead-needle"></div>
+            </div>
+            
+            <p class="text-[11px] text-gray-500 text-right">
+              Glissez la souris sur la forme d'onde ou utilisez les boutons ci-dessous pour ajuster au millième de seconde.
+            </p>
+          </div>
+
+          <!-- Start / End Precise Controls -->
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            
+            <!-- Start Time Card -->
+            <div class="bg-gray-900/60 p-3.5 rounded-xl border border-white/10 space-y-2">
+              <div class="flex items-center justify-between">
+                <span class="text-xs font-bold text-cyan-400 flex items-center gap-1.5">
+                  <span class="w-2 h-2 rounded-full bg-cyan-400"></span> Début
+                </span>
+                <button id="btn-set-start-here" class="text-[11px] px-2 py-0.5 rounded bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 transition">
+                  Poser sur curseur
+                </button>
+              </div>
+              
+              <div class="flex items-center gap-2">
+                <button class="step-btn px-2 py-1 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded text-xs font-mono" data-target="start" data-delta="-0.5">-0.5s</button>
+                <button class="step-btn px-2 py-1 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded text-xs font-mono" data-target="start" data-delta="-0.1">-0.1s</button>
+                <input type="number" id="input-start-sec" step="0.01" min="0" value="0.00" class="w-full text-center py-1 rounded bg-black/40 border border-white/15 text-sm font-mono text-cyan-300 focus:outline-none focus:border-cyan-400">
+                <button class="step-btn px-2 py-1 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded text-xs font-mono" data-target="start" data-delta="0.1">+0.1s</button>
+                <button class="step-btn px-2 py-1 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded text-xs font-mono" data-target="start" data-delta="0.5">+0.5s</button>
+              </div>
+            </div>
+
+            <!-- End Time Card -->
+            <div class="bg-gray-900/60 p-3.5 rounded-xl border border-white/10 space-y-2">
+              <div class="flex items-center justify-between">
+                <span class="text-xs font-bold text-pink-400 flex items-center gap-1.5">
+                  <span class="w-2 h-2 rounded-full bg-pink-400"></span> Fin
+                </span>
+                <button id="btn-set-end-here" class="text-[11px] px-2 py-0.5 rounded bg-pink-500/10 hover:bg-pink-500/20 text-pink-300 border border-pink-500/30 transition">
+                  Poser sur curseur
+                </button>
+              </div>
+              
+              <div class="flex items-center gap-2">
+                <button class="step-btn px-2 py-1 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded text-xs font-mono" data-target="end" data-delta="-0.5">-0.5s</button>
+                <button class="step-btn px-2 py-1 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded text-xs font-mono" data-target="end" data-delta="-0.1">-0.1s</button>
+                <input type="number" id="input-end-sec" step="0.01" min="0" value="0.00" class="w-full text-center py-1 rounded bg-black/40 border border-white/15 text-sm font-mono text-pink-300 focus:outline-none focus:border-pink-400">
+                <button class="step-btn px-2 py-1 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded text-xs font-mono" data-target="end" data-delta="0.1">+0.1s</button>
+                <button class="step-btn px-2 py-1 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded text-xs font-mono" data-target="end" data-delta="0.5">+0.5s</button>
+              </div>
+            </div>
+
+          </div>
+
+          <!-- Preview & Playback bar -->
+          <div class="flex flex-wrap items-center justify-between gap-3 p-3 bg-gray-900/40 rounded-xl border border-white/5">
+            <div class="flex items-center gap-2">
+              <button id="btn-preview-selection" class="flex items-center gap-2 px-4 py-2 rounded-lg bg-white/10 hover:bg-white/20 text-white font-medium text-xs transition">
+                <i data-lucide="play" id="icon-preview-play" class="w-4 h-4 fill-current"></i>
+                <span id="text-preview-btn">Écouter l'extrait</span>
+              </button>
+
+              <button id="btn-preview-loop" class="p-2 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white transition" title="Boucler la lecture">
+                <i data-lucide="repeat" class="w-4 h-4"></i>
+              </button>
+            </div>
+
+            <div class="text-xs font-mono text-gray-300">
+              Durée de l'extrait : <strong id="val-trimmed-duration" class="text-cyan-400 text-sm">0.00s</strong>
+            </div>
+          </div>
+
+          <!-- Sound Metadata (Name, Keybind, Category, Color, Emoji) -->
+          <div class="space-y-4 pt-2 border-t border-white/10">
+            <label class="block text-xs font-semibold text-gray-300 uppercase tracking-wider">3. Personnalisation du bouton</label>
+            
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <!-- Name -->
+              <div>
+                <label class="block text-xs text-gray-400 mb-1">Nom du son</label>
+                <input type="text" id="input-sound-name" placeholder="Ex: Airhorn, Bruh, GG..." class="w-full px-3.5 py-2 rounded-xl bg-gray-900/80 border border-white/10 text-sm text-gray-200 focus:outline-none focus:border-cyan-500">
+              </div>
+
+              <!-- Category -->
+              <div>
+                <label class="block text-xs text-gray-400 mb-1">Catégorie</label>
+                <select id="select-sound-cat" class="w-full px-3.5 py-2 rounded-xl bg-gray-900/80 border border-white/10 text-sm text-gray-200 focus:outline-none focus:border-cyan-500">
+                  <option value="Memes">😂 Memes</option>
+                  <option value="Effets">💥 Effets</option>
+                  <option value="Musique">🎵 Musique</option>
+                  <option value="Voix">🗣️ Voix</option>
+                  <option value="Général">🔊 Général</option>
+                </select>
+              </div>
+
+              <!-- Keybind -->
+              <div>
+                <label class="block text-xs text-gray-400 mb-1">Raccourci clavier</label>
+                <div class="flex gap-2">
+                  <input type="text" id="input-sound-key" maxlength="1" placeholder="Ex: 1, 2, A, B..." class="w-full uppercase text-center px-3.5 py-2 rounded-xl bg-gray-900/80 border border-white/10 text-sm font-mono text-cyan-300 focus:outline-none focus:border-cyan-500">
+                  <button id="btn-auto-key" class="px-3 py-2 text-xs rounded-xl bg-gray-800 hover:bg-gray-700 text-gray-300 whitespace-nowrap">Auto</button>
+                </div>
+              </div>
+
+              <!-- Emoji / Icon -->
+              <div>
+                <label class="block text-xs text-gray-400 mb-1">Emoji / Icône</label>
+                <div class="flex items-center gap-2">
+                  <input type="text" id="input-sound-emoji" value="🔊" class="w-16 text-center text-lg py-1 rounded-xl bg-gray-900/80 border border-white/10 text-gray-200">
+                  <div class="flex gap-1 overflow-x-auto text-base">
+                    <button type="button" class="emoji-pick p-1 rounded hover:bg-white/10">🔊</button>
+                    <button type="button" class="emoji-pick p-1 rounded hover:bg-white/10">🎺</button>
+                    <button type="button" class="emoji-pick p-1 rounded hover:bg-white/10">💀</button>
+                    <button type="button" class="emoji-pick p-1 rounded hover:bg-white/10">💥</button>
+                    <button type="button" class="emoji-pick p-1 rounded hover:bg-white/10">🎉</button>
+                    <button type="button" class="emoji-pick p-1 rounded hover:bg-white/10">🔔</button>
+                    <button type="button" class="emoji-pick p-1 rounded hover:bg-white/10">🎮</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Color preset picker -->
+            <div>
+              <label class="block text-xs text-gray-400 mb-2">Couleur d'accent</label>
+              <div class="flex items-center gap-3" id="color-picker-group">
+                <button type="button" class="color-btn w-7 h-7 rounded-full bg-cyan-500 ring-2 ring-white ring-offset-2 ring-offset-gray-900 transition" data-color="#06b6d4"></button>
+                <button type="button" class="color-btn w-7 h-7 rounded-full bg-purple-500 hover:scale-110 transition" data-color="#8b5cf6"></button>
+                <button type="button" class="color-btn w-7 h-7 rounded-full bg-pink-500 hover:scale-110 transition" data-color="#ec4899"></button>
+                <button type="button" class="color-btn w-7 h-7 rounded-full bg-emerald-500 hover:scale-110 transition" data-color="#10b981"></button>
+                <button type="button" class="color-btn w-7 h-7 rounded-full bg-amber-500 hover:scale-110 transition" data-color="#f59e0b"></button>
+                <button type="button" class="color-btn w-7 h-7 rounded-full bg-rose-600 hover:scale-110 transition" data-color="#e11d48"></button>
+                <button type="button" class="color-btn w-7 h-7 rounded-full bg-indigo-500 hover:scale-110 transition" data-color="#6366f1"></button>
+              </div>
+            </div>
+
+          </div>
+
+        </div>
+
+      </div>
+
+      <!-- Modal Footer Actions -->
+      <div class="flex flex-col sm:flex-row items-center justify-between gap-3 px-6 py-4 border-t border-white/10 bg-gray-900/60">
+        <!-- Direct MP3 download button -->
+        <button id="btn-download-mp3-direct" disabled class="w-full sm:w-auto flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-purple-600/30 hover:bg-purple-600/50 text-purple-300 border border-purple-500/40 text-xs font-bold uppercase tracking-wider transition disabled:opacity-40 disabled:pointer-events-none">
+          <i data-lucide="download" class="w-4 h-4"></i>
+          <span>Télécharger en MP3</span>
+        </button>
+
+        <div class="flex items-center gap-2.5 w-full sm:w-auto">
+          <button id="btn-cancel-modal" class="flex-1 sm:flex-none px-4 py-2.5 rounded-xl bg-gray-800 hover:bg-gray-700 text-gray-300 text-xs font-semibold transition">
+            Annuler
+          </button>
+          
+          <button id="btn-save-to-soundboard" disabled class="flex-1 sm:flex-none flex items-center justify-center gap-2 px-6 py-2.5 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-gray-950 font-bold text-xs uppercase tracking-wider shadow-lg shadow-cyan-500/25 transition disabled:opacity-40 disabled:pointer-events-none">
+            <i data-lucide="check" class="w-4 h-4 stroke-[3]"></i>
+            <span id="btn-save-text">Ajouter à la Soundboard</span>
+          </button>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Notification Toast -->
+  <div id="toast" class="fixed bottom-6 right-6 z-50 glass-modal px-4 py-3 rounded-xl border border-white/15 text-sm flex items-center gap-2.5 transform translate-y-24 opacity-0 transition-all duration-300 shadow-2xl pointer-events-none">
+    <i data-lucide="info" id="toast-icon" class="w-4 h-4 text-cyan-400"></i>
+    <span id="toast-text" class="text-gray-200">Message</span>
+  </div>
+
+  <!-- App Script -->
+  <script src="js/app.js"></script>
+</body>
+</html>
